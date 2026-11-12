@@ -601,10 +601,13 @@ static void ResourceLoop_runResource(ResourceLoop_t* loop,
                 ((loopExtension->loopState == RESOURCE_LOOP_RUNNING) &&
                  loopControl->done) ||
                 ((loopExtension->loopState == RESOURCE_LOOP_STOPPING) &&
-                 !loopControl->prohibitStop);
+                 (loopControl->stopRequest ||
+                  !loopControl->prohibitStop));
 
-    // Az INPUT onmagaban nem futtat callbacket. Ha az esemeny nem
-    // illeszkedik a waitedEvents maszkra, az atvett esemeny elveszik.
+    // A STOP kerest elfogado resource leallitasi callbackje mas resource
+    // ebredesekor is tovabbhaladhat, amig a prohibitStop meg aktiv.
+    // Az INPUT onmagaban normal esetben nem futtat callbacket. Ha az esemeny
+    // nem illeszkedik a waitedEvents maszkra, az atvett esemeny elveszik.
     if (!shouldRun)
     {
         return;
@@ -1061,6 +1064,7 @@ static void ResourceLoop_runResource(ResourceLoop_t* loop,
             return;
         }
     }
+      //            RESOURCE_LOOP_CLOSING_ERROR)
 
     // Ujabb loop futas idozites utemezese
     ResourceLoop_scheduleTimer(loop, resource);
