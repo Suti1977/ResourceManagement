@@ -1475,6 +1475,15 @@ static void Resource_setStateInternal(Resource_t* resource,
     {
         ResourceManager_queueResource(dep->resource);
     }
+
+    // A teljes propagalt lanc legmelyebb dependentjenek valtozasa utan
+    // a gyoker hibaforrast is ujra ellenorizni kell. A kozvetlen dependency
+    // utemezese onmagaban nem eleg, ha az mar WAITING allapotban van.
+    if ((resource->recoveryFaultSource != NULL) &&
+        (resource->recoveryFaultSource != resource))
+    {
+        ResourceManager_queueResource(resource->recoveryFaultSource);
+    }
 }
 //------------------------------------------------------------------------------
 // Manager altal eloallitott hiba beallitasa.
