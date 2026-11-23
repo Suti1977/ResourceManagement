@@ -93,7 +93,8 @@ static const char*  ResourceEvent_strings[]=
     [RESOURCE_EVENT_ERROR]     = "ERROR",
     [RESOURCE_EVENT_RECOVERY]  = "RECOVERY",
     [RESOURCE_EVENT_RECOVERED] = "RECOVERED",
-    [RESOURCE_EVENT_DONE]      = "DONE"
+    [RESOURCE_EVENT_DONE]      = "DONE",
+    [RESOURCE_EVENT_RELEASED]  = "RELEASED"
 };
 //------------------------------------------------------------------------------
 // Resource allapot szovegge alakitasa nyomkoveteshez.
@@ -518,10 +519,21 @@ static void Resource_notifyEvent(Resource_t* resource,
     ResourceUser_t* user;
     for (user = resource->users; user != NULL; user = user->next)
     {
-        // Az inaktiv user nem kap esemenyjelzest.
-        if (!user->requested)
+        // A STOPPED esemenyt azok a userek is megkapjak, akik a lifecycle
+        // kozben elengedtek az igenyt, de a tenyleges leallas meg nem tortent
+        // meg. Mas esemenyt csak aktiv igenylo kaphat.
+        if (!user->requested &&
+            !((event == RESOURCE_EVENT_STOPPED) &&
+              user->stoppedEventPending))
         {
             continue;
+        }
+
+        // A STOPPED visszajelzes egyszeri. A flaget a callback elott toroljuk,
+        // hogy egy reentrans callback ne okozhasson dupla ertesitest.
+        if (event == RESOURCE_EVENT_STOPPED)
+        {
+            user->stoppedEventPending = false;
         }
 
         // A STARTED/RECOVERED esemeny egy ujonnan igenylo user keszenleti
@@ -2101,6 +2113,7 @@ void Resource_request(ResourceUser_t* user)
     if (!user->requested)
     {
         user->requested = true;
+        user->stoppedEventPending = false;
 
         // Referencias szamlalo novelese
         resource->refCount++;
@@ -2156,6 +2169,13 @@ void Resource_release(ResourceUser_t* user)
     // eroforras referencia-szamlalojat.
     if (user->requested)
     {
+        // A user mar nem aktiv, de a leallas aszinkron. Ha a resource
+        // lifecycle allapotban van, a usernek a kesobbi STOPPED esemenyt
+        // meg meg kell kapnia.
+        user->stoppedEventPending =
+            (resource->state != RESOURCE_STOPPED) &&
+            (resource->state != RESOURCE_DONE_);
+
         user->requested = false;
         user->startedEventPending = false;
         user->doneEventPending = false;
@@ -2175,6 +2195,14 @@ void Resource_release(ResourceUser_t* user)
             resource->recoveryOverride = RESOURCE_RECOVERY_OVERRIDE_DEFAULT;
         }
         ResourceManager_queueResource(resource);
+
+        // A release az adott user szamara azonnali visszajelzes. Ez nem
+        // jelenti azt, hogy maga az eroforras mar leallt volna.
+        if (user->eventFunc != NULL)
+        {
+            user->eventFunc(user, RESOURCE_EVENT_RELEASED, NULL,
+                           user->callbackData);
+        }
     }
 
     ResourceManager_unlock(manager);

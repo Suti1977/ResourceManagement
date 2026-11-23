@@ -149,7 +149,9 @@ typedef enum
     // A hiba miatti helyreallitas sikeresen lefutott
     RESOURCE_EVENT_RECOVERED,
     // Az eroforras vegzett a feladataval. (Egyszer lefuto feladatok eseten)
-    RESOURCE_EVENT_DONE
+    RESOURCE_EVENT_DONE,
+    // Az adott user elengedte az eroforras igenyleset.
+    RESOURCE_EVENT_RELEASED
 } ResourceEvent_t;
 //------------------------------------------------------------------------------
 // Dependency hiba kezelese.
@@ -303,6 +305,10 @@ struct _ResourceUser
     // Igaz, ha a DONE esemenyt meg ki kell kuldeni, mert a user mar DONE
     // allapotban igenyelte az eroforrast.
     bool doneEventPending;
+
+    // Igaz, ha a user elengedte az igenyt, de a resource az adott lifecycle
+    // soran meg nem allt le, ezert a STOPPED esemenyt meg meg kell kapnia.
+    bool stoppedEventPending;
 
     // A user esemenyeire meghivando callback.
     Resource_event_cb_t eventFunc;
@@ -770,7 +776,7 @@ bool Resource_addDependency(ResourceDependency_t* dependency,
 }
 // Ugyanez a makro, de a harmadik parameterben megadhato a
 // hibakezelesi strategia.
-#define CREATE_RESOURCE_DEPENDENCY__(resource, dependencyResource, \
+#define CREATE_RESOURCE_DEPENDENCY(resource, dependencyResource, \
                                    errorStrategy) \
 {   static ResourceDependency_t MY_EVALUATOR(DEP_,__LINE__); \
     Resource_addDependency(& MY_EVALUATOR(DEP_,__LINE__), \
